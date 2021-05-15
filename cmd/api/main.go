@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
@@ -44,7 +45,9 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 	}
 
-	logger.Printf("starting %s server on %s", cfg.env, srv.Addr)
+	baseUrl, _ := url.Parse(fmt.Sprintf("http://localhost%s/v1/healthcheck", srv.Addr))
+
+	logger.Printf("starting %s server on %s %s", cfg.env, srv.Addr, baseUrl)
 	if err := srv.ListenAndServe(); err != nil {
 		logger.Fatal(err)
 	}
