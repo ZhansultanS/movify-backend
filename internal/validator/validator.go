@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"github.com/DARKestMODE/movify/internal/data"
 	"regexp"
 )
 
@@ -45,12 +44,3 @@ func In(value string, list ...string) bool {
 func Matches(value string, rx *regexp.Regexp) bool {
 	return rx.MatchString(value)
 }
-
-func Unique(values []data.Genre) bool {
-	uniqueValues := make(map[data.Genre]bool)
-	for _, value := range values {
-		uniqueValues[value] = true
-	}
-	return len(values) == len(uniqueValues)
-}
-

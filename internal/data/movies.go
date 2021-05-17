@@ -2,21 +2,22 @@ package data
 
 import (
 	"github.com/DARKestMODE/movify/internal/validator"
+	"gorm.io/gorm"
 )
 
 type Movie struct {
-	ID          int64   `json:"id"`
+	ID          int64   `json:"id" gorm:"primaryKey"`
 	Title       string  `json:"title"`
 	Overview    string  `json:"overview"`
 	ReleaseDate string  `json:"release_date"`
 	Runtime     int32   `json:"runtime"`
 	Popularity  float32 `json:"popularity"`
 	PosterPath  string  `json:"poster_path"`
-	Genres      []Genre `json:"genres"`
+	Genres      []Genre `json:"genres" gorm:"many2many:movie_genres"`
 }
 
 type Genre struct {
-	Id   int64  `json:"id"`
+	Id   int64  `json:"id" gorm:"primaryKey"`
 	Name string `json:"name"`
 }
 
@@ -33,5 +34,24 @@ func ValidateMovie(v *validator.Validator, movie *Movie) {
 	v.Check(movie.Genres != nil, "genres", "must be provided")
 	v.Check(len(movie.Genres) >= 1, "genres", "must contain at least 1 genre")
 	v.Check(len(movie.Genres) <= 5, "genres", "must not contain more than 5 genres")
-	v.Check(validator.Unique(movie.Genres), "genres", "must not contain duplicate values")
+}
+
+type MovieModel struct {
+	DB *gorm.DB
+}
+
+func (m MovieModel) Insert(movie *Movie) error {
+	return m.DB.Create(&movie).Error
+}
+
+func (m MovieModel) Get(id int64) (*Movie, error) {
+	return nil, nil
+}
+
+func (m MovieModel) Update(movie *Movie) error {
+	return nil
+}
+
+func (m MovieModel) Delete(id int64) error {
+	return nil
 }
