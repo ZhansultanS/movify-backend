@@ -1,4 +1,5 @@
 package main
+
 import (
 	"encoding/json"
 	"errors"
@@ -6,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 )
+
+type envelope map[string]interface{}
 
 func (app *application) readIDParam(r *http.Request) (int64, error) {
 	params := httprouter.ParamsFromContext(r.Context())
@@ -16,7 +19,7 @@ func (app *application) readIDParam(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func (app *application) writeJSON(w http.ResponseWriter, status int, data interface{}, headers http.Header) error {
+func (app *application) writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
 	res, err := json.Marshal(data)
 	if err != nil {
 		return err
