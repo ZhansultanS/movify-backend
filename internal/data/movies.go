@@ -1,24 +1,27 @@
 package data
 
 import (
+	"errors"
 	"github.com/DARKestMODE/movify/internal/validator"
 	"gorm.io/gorm"
 )
 
 type Movie struct {
-	ID          int64   `json:"id" gorm:"primaryKey"`
+	Id          int64   `gorm:"primaryKey"`
+	IdTMDB      int64   `json:"IdTMDB" gorm:"unique"`
 	Title       string  `json:"title"`
 	Overview    string  `json:"overview"`
 	ReleaseDate string  `json:"release_date"`
 	Runtime     int32   `json:"runtime"`
 	Popularity  float32 `json:"popularity"`
 	PosterPath  string  `json:"poster_path"`
-	Genres      []Genre `json:"genres" gorm:"many2many:movie_genres"`
+	Genres      []Genre `json:"genres" gorm:"many2many:movie_genres;foreignKey:IdTMDB;joinForeignKey:MovieIdTMDB;References:IdTMDB;JoinReferences:IdTMDB"`
 }
 
 type Genre struct {
-	Id   int64  `json:"id" gorm:"primaryKey"`
-	Name string `json:"name"`
+	Id     int64  `gorm:"primaryKey"`
+	IdTMDB int64  `json:"IdTMDB" gorm:"unique"`
+	Name   string `json:"name"`
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {
@@ -45,7 +48,19 @@ func (m MovieModel) Insert(movie *Movie) error {
 }
 
 func (m MovieModel) Get(id int64) (*Movie, error) {
-	return nil, nil
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+	var movie Movie
+	if err := m.DB.Preload("Genres").First(&movie, id).Error; err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &movie, nil
 }
 
 func (m MovieModel) Update(movie *Movie) error {
