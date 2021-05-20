@@ -1,30 +1,46 @@
 package data
 
 import (
-	"errors"
+	"database/sql"
+	"encoding/json"
+	"fmt"
 	"github.com/DARKestMODE/movify/internal/validator"
-	"gorm.io/gorm"
+	"github.com/lib/pq"
 )
 
 type Movie struct {
-	Id          int64   `gorm:"primaryKey"`
-	IdTMDB      int64   `json:"IdTMDB" gorm:"unique"`
-	Title       string  `json:"title"`
-	Overview    string  `json:"overview"`
-	ReleaseDate string  `json:"release_date"`
-	Runtime     int32   `json:"runtime"`
-	Popularity  float32 `json:"popularity"`
-	PosterPath  string  `json:"poster_path"`
-	Genres      []Genre `json:"genres" gorm:"many2many:movie_genres;foreignKey:IdTMDB;joinForeignKey:MovieIdTMDB;References:IdTMDB;JoinReferences:IdTMDB"`
+	Id          int64          `gorm:"primaryKey"`
+	IdTMDB      int64          `json:"IdTMDB"`
+	Title       string         `json:"title"`
+	Overview    string         `json:"overview"`
+	ReleaseDate string         `json:"release_date"`
+	Runtime     Runtime        `json:"runtime"`
+	Popularity  float32        `json:"popularity"`
+	PosterPath  string         `json:"poster_path"`
+	Genres      pq.StringArray `json:"genres" gorm:"type:text[]"`
 }
 
-type Genre struct {
-	Id     int64  `gorm:"primaryKey"`
-	IdTMDB int64  `json:"IdTMDB" gorm:"unique"`
-	Name   string `json:"name"`
+func (m Movie) MarshalJSON() ([]byte, error) {
+	var runtime string
+	if m.Runtime != 0 {
+		runtime = fmt.Sprintf("%d mins", m.Runtime)
+	}
+
+	type MovieAlias Movie
+
+	aux := struct {
+		MovieAlias
+		Runtime string `json:"runtime,omitempty"`
+	}{
+		MovieAlias: MovieAlias(m),
+		Runtime:    runtime,
+	}
+
+	return json.Marshal(aux)
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {
+	v.Check(movie.IdTMDB != 0, "id_tmdb", "must be provided")
 	v.Check(movie.Title != "", "title", "must be provided")
 	v.Check(len(movie.Title) <= 500, "title", "must not be more than 500 bytes long")
 	v.Check(movie.Overview != "", "overview", "must be provided")
@@ -37,30 +53,28 @@ func ValidateMovie(v *validator.Validator, movie *Movie) {
 	v.Check(movie.Genres != nil, "genres", "must be provided")
 	v.Check(len(movie.Genres) >= 1, "genres", "must contain at least 1 genre")
 	v.Check(len(movie.Genres) <= 5, "genres", "must not contain more than 5 genres")
+	v.Check(validator.Unique(movie.Genres), "genres", "must not contain duplicate values")
 }
 
 type MovieModel struct {
-	DB *gorm.DB
+	DB *sql.DB
 }
 
-func (m MovieModel) Insert(movie *Movie) error {
-	return m.DB.Create(&movie).Error
+func (m MovieModel) Insert(mv *Movie) error {
+	query := `INSERT INTO movies (id_tmdb, title, overview, release_date, runtime, genres, popularity, poster_path)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			  RETURNING id`
+	args := []interface{}{mv.IdTMDB, mv.Title, mv.Overview, mv.ReleaseDate, mv.Runtime, pq.Array(mv.Genres), mv.Popularity, mv.PosterPath}
+	return m.DB.QueryRow(query, args...).Scan(&mv.Id)
 }
 
 func (m MovieModel) Get(id int64) (*Movie, error) {
-	if id < 1 {
-		return nil, ErrRecordNotFound
-	}
-	var movie Movie
-	if err := m.DB.Preload("Genres").First(&movie, id).Error; err != nil {
-		switch {
-		case errors.Is(err, gorm.ErrRecordNotFound):
-			return nil, ErrRecordNotFound
-		default:
-			return nil, err
-		}
-	}
-	return &movie, nil
+	return nil, nil
+}
+
+func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
+	var movies []*Movie
+	return movies, nil
 }
 
 func (m MovieModel) Update(movie *Movie) error {

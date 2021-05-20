@@ -1,8 +1,8 @@
 package data
 
 import (
+	"database/sql"
 	"errors"
-	"gorm.io/gorm"
 )
 
 var (
@@ -13,7 +13,7 @@ type Models struct {
 	Movies MovieModel
 }
 
-func NewModels(db *gorm.DB) Models {
+func NewModels(db *sql.DB) Models {
 	return Models{
 		Movies: MovieModel{DB: db},
 	}
