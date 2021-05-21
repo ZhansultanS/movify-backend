@@ -13,7 +13,7 @@ type Movie struct {
 	Title       string         `json:"title"`
 	Overview    string         `json:"overview"`
 	ReleaseDate string         `json:"release_date"`
-	Runtime     int16        `json:"runtime"`
+	Runtime     int16          `json:"runtime"`
 	Popularity  float32        `json:"popularity"`
 	PosterPath  string         `json:"poster_path"`
 	Genres      pq.StringArray `json:"genres"`
@@ -42,8 +42,8 @@ type MovieModel struct {
 
 func (m MovieModel) Insert(mv *Movie) error {
 	q := `INSERT INTO movies (id_tmdb, title, overview, release_date, runtime, genres, popularity, poster_path)
-			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			  RETURNING id`
+		  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		  RETURNING id`
 	args := []interface{}{mv.IdTMDB, mv.Title, mv.Overview, mv.ReleaseDate, mv.Runtime, pq.Array(mv.Genres), mv.Popularity, mv.PosterPath}
 	return m.DB.QueryRow(q, args...).Scan(&mv.Id)
 }
@@ -70,8 +70,10 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 		&mv.Popularity,
 		&mv.PosterPath,
 	)
-	for _, g := range genres{
-		if !g.Valid { continue }
+	for _, g := range genres {
+		if !g.Valid {
+			continue
+		}
 		mv.Genres = append(mv.Genres, g.String)
 	}
 	if err != nil {
@@ -91,8 +93,17 @@ func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*M
 	return movies, nil
 }
 
-func (m MovieModel) Update(movie *Movie) error {
-	return nil
+func (m MovieModel) Update(mv *Movie) error {
+	q := `UPDATE movies
+		  SET id_tmdb = $2, title = $3, overview = $4, release_date = $5, runtime = $6, popularity = $7, poster_path = $8, genres = $9
+		  WHERE id = $1`
+	args := []interface{}{
+		mv.Id, mv.IdTMDB, mv.Title,
+		mv.Overview, mv.ReleaseDate, mv.Runtime,
+		mv.Popularity, mv.PosterPath, pq.Array(mv.Genres),
+	}
+
+	return m.DB.QueryRow(q, args...).Err()
 }
 
 func (m MovieModel) Delete(id int64) error {

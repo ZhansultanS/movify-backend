@@ -10,14 +10,14 @@ import (
 
 func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		IdTMDB      int64        `json:"id_tmdb"`
-		Title       string       `json:"title"`
-		Overview    string       `json:"overview"`
-		ReleaseDate string       `json:"release_date"`
-		Runtime     int16 `json:"runtime"`
-		Genres      []string     `json:"genres"`
-		Popularity  float32      `json:"popularity"`
-		PosterPath  string       `json:"poster_path"`
+		IdTMDB      int64    `json:"id_tmdb"`
+		Title       string   `json:"title"`
+		Overview    string   `json:"overview"`
+		ReleaseDate string   `json:"release_date"`
+		Runtime     int16    `json:"runtime"`
+		Genres      []string `json:"genres"`
+		Popularity  float32  `json:"popularity"`
+		PosterPath  string   `json:"poster_path"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -84,7 +84,78 @@ func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Request) {
-	err := app.writeJSON(w, http.StatusOK, envelope{"movie": "In process of development"}, nil)
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	movie, err := app.models.Movies.Get(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	var input struct {
+		IdTMDB      *int64   `json:"id_tmdb"`
+		Title       *string  `json:"title"`
+		Overview    *string  `json:"overview"`
+		ReleaseDate *string  `json:"release_date"`
+		Runtime     *int16   `json:"runtime"`
+		Genres      []string `json:"genres"`
+		Popularity  *float32 `json:"popularity"`
+		PosterPath  *string  `json:"poster_path"`
+	}
+
+	err = app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	if input.IdTMDB != nil {
+		movie.IdTMDB = *input.IdTMDB
+	}
+	if input.Title != nil {
+		movie.Title = *input.Title
+	}
+	if input.Overview != nil {
+		movie.Overview = *input.Overview
+	}
+	if input.ReleaseDate != nil {
+		movie.ReleaseDate = *input.ReleaseDate
+	}
+	if input.Runtime != nil {
+		movie.Runtime = *input.Runtime
+	}
+	if input.Genres != nil {
+		movie.Genres = input.Genres
+	}
+	if input.Popularity != nil {
+		movie.Popularity = *input.Popularity
+	}
+	if input.PosterPath != nil {
+		movie.PosterPath = *input.PosterPath
+	}
+
+	v := validator.New()
+	if data.ValidateMovie(v, movie); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	err = app.models.Movies.Update(movie)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"movie": movie}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
