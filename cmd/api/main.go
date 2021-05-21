@@ -4,13 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"fmt"
 	"github.com/DARKestMODE/movify/internal/data"
 	"github.com/DARKestMODE/movify/internal/jsonlog"
 	_ "github.com/lib/pq"
-	"log"
-	"net/http"
-	"net/url"
 	"os"
 	"time"
 )
@@ -70,24 +66,7 @@ func main() {
 		models: data.NewModels(db),
 	}
 
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      app.routes(),
-		ErrorLog:     log.New(logger, "", 0),
-		IdleTimeout:  time.Minute,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
-	}
-
-	baseUrl, _ := url.Parse(fmt.Sprintf("http://localhost%s/v1/healthcheck", srv.Addr))
-
-	logger.PrintInfo("starting server", map[string]string{
-		"addr": srv.Addr,
-		"env":  cfg.env,
-		"url":  baseUrl.String(),
-	})
-
-	if err = srv.ListenAndServe(); err != nil {
+	if err = app.serve(); err != nil {
 		logger.PrintFatal(err, nil)
 	}
 }
