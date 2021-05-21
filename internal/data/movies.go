@@ -1,10 +1,12 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"github.com/DARKestMODE/movify/internal/validator"
 	"github.com/lib/pq"
+	"time"
 )
 
 type Movie struct {
@@ -17,6 +19,15 @@ type Movie struct {
 	Popularity  float32        `json:"popularity"`
 	PosterPath  string         `json:"poster_path"`
 	Genres      pq.StringArray `json:"genres"`
+}
+
+func (m *Movie) SanitizeGenres(genres []sql.NullString) {
+	for _, g := range genres {
+		if !g.Valid {
+			continue
+		}
+		m.Genres = append(m.Genres, g.String)
+	}
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {
@@ -70,12 +81,7 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 		&mv.Popularity,
 		&mv.PosterPath,
 	)
-	for _, g := range genres {
-		if !g.Valid {
-			continue
-		}
-		mv.Genres = append(mv.Genres, g.String)
-	}
+	mv.SanitizeGenres(genres)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -89,7 +95,48 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 }
 
 func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
+	q := `SELECT *
+		  FROM movies
+		  WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
+		  AND (genres @> $2 OR $2 = '{}')
+		  ORDER BY id`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.QueryContext(ctx, q, title, pq.Array(genres))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
 	var movies []*Movie
+	for rows.Next() {
+		var movie Movie
+		var gnrs []sql.NullString
+		err := rows.Scan(
+			&movie.Id,
+			&movie.IdTMDB,
+			&movie.Title,
+			&movie.Overview,
+			&movie.ReleaseDate,
+			&movie.Runtime,
+			pq.Array(&gnrs),
+			&movie.Popularity,
+			&movie.PosterPath,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		movie.SanitizeGenres(gnrs)
+		movies = append(movies, &movie)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return movies, nil
 }
 
