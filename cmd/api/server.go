@@ -44,7 +44,7 @@ func (app *application) serve() error {
 		})
 
 		app.wg.Wait()
-		shutdownError <- srv.Shutdown(ctx)
+		shutdownError <- nil
 	}()
 
 	baseUrl, _ := url.Parse(fmt.Sprintf("http://localhost%s/v1/healthcheck", srv.Addr))

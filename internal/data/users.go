@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"github.com/DARKestMODE/movify/internal/validator"
@@ -129,6 +130,43 @@ func (m UserModel) Update(user *User) error {
 		}
 	}
 	return nil
+}
+
+func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
+	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
+
+	q := `SELECT u.id, u.created_at, u.name, u.email, u.password_hash, u.activated, u.version
+		  FROM users u
+		  INNER JOIN tokens
+		  ON u.id = tokens.user_id
+		  WHERE tokens.hash = $1
+		  AND tokens.scope = $2
+		  AND tokens.expiry > $3`
+
+	args := []interface{}{tokenHash[:], tokenScope, time.Now()}
+	var user User
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, q, args...).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.Name,
+		&user.Email,
+		&user.Password.hash,
+		&user.Activated,
+		&user.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
 }
 
 type password struct {
