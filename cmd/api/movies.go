@@ -14,7 +14,7 @@ func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Reques
 		Title       string       `json:"title"`
 		Overview    string       `json:"overview"`
 		ReleaseDate string       `json:"release_date"`
-		Runtime     data.Runtime `json:"runtime"`
+		Runtime     int16 `json:"runtime"`
 		Genres      []string     `json:"genres"`
 		Popularity  float32      `json:"popularity"`
 		PosterPath  string       `json:"poster_path"`
@@ -91,7 +91,23 @@ func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (app *application) deleteMovieHandler(w http.ResponseWriter, r *http.Request) {
-	err := app.writeJSON(w, http.StatusOK, envelope{"movie": "In process of development"}, nil)
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+	err = app.models.Movies.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "movie successfully deleted"}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

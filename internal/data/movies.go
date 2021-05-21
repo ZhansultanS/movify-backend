@@ -2,8 +2,7 @@ package data
 
 import (
 	"database/sql"
-	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/DARKestMODE/movify/internal/validator"
 	"github.com/lib/pq"
 )
@@ -14,29 +13,10 @@ type Movie struct {
 	Title       string         `json:"title"`
 	Overview    string         `json:"overview"`
 	ReleaseDate string         `json:"release_date"`
-	Runtime     Runtime        `json:"runtime"`
+	Runtime     int16        `json:"runtime"`
 	Popularity  float32        `json:"popularity"`
 	PosterPath  string         `json:"poster_path"`
-	Genres      pq.StringArray `json:"genres" gorm:"type:text[]"`
-}
-
-func (m Movie) MarshalJSON() ([]byte, error) {
-	var runtime string
-	if m.Runtime != 0 {
-		runtime = fmt.Sprintf("%d mins", m.Runtime)
-	}
-
-	type MovieAlias Movie
-
-	aux := struct {
-		MovieAlias
-		Runtime string `json:"runtime,omitempty"`
-	}{
-		MovieAlias: MovieAlias(m),
-		Runtime:    runtime,
-	}
-
-	return json.Marshal(aux)
+	Genres      pq.StringArray `json:"genres"`
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {
@@ -61,15 +41,49 @@ type MovieModel struct {
 }
 
 func (m MovieModel) Insert(mv *Movie) error {
-	query := `INSERT INTO movies (id_tmdb, title, overview, release_date, runtime, genres, popularity, poster_path)
+	q := `INSERT INTO movies (id_tmdb, title, overview, release_date, runtime, genres, popularity, poster_path)
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			  RETURNING id`
 	args := []interface{}{mv.IdTMDB, mv.Title, mv.Overview, mv.ReleaseDate, mv.Runtime, pq.Array(mv.Genres), mv.Popularity, mv.PosterPath}
-	return m.DB.QueryRow(query, args...).Scan(&mv.Id)
+	return m.DB.QueryRow(q, args...).Scan(&mv.Id)
 }
 
 func (m MovieModel) Get(id int64) (*Movie, error) {
-	return nil, nil
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+
+	q := `SELECT *
+		  FROM movies
+		  WHERE id = $1`
+
+	var mv Movie
+	var genres []sql.NullString
+	err := m.DB.QueryRow(q, id).Scan(
+		&mv.Id,
+		&mv.IdTMDB,
+		&mv.Title,
+		&mv.Overview,
+		&mv.ReleaseDate,
+		&mv.Runtime,
+		pq.Array(&genres),
+		&mv.Popularity,
+		&mv.PosterPath,
+	)
+	for _, g := range genres{
+		if !g.Valid { continue }
+		mv.Genres = append(mv.Genres, g.String)
+	}
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &mv, nil
 }
 
 func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
@@ -82,5 +96,24 @@ func (m MovieModel) Update(movie *Movie) error {
 }
 
 func (m MovieModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+
+	q := `DELETE FROM movies
+		  WHERE id = $1`
+	result, err := m.DB.Exec(q, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
 	return nil
 }
