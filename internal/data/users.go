@@ -14,13 +14,13 @@ var (
 )
 
 type User struct {
-	ID int64 `json:"id"`
+	ID        int64     `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	Password password `json:"-"`
-	Activated bool `json:"activated"`
-	Version int `json:"-"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Password  password  `json:"-"`
+	Activated bool      `json:"activated"`
+	Version   int       `json:"-"`
 }
 
 func ValidateEmail(v *validator.Validator, email string) {
@@ -62,7 +62,7 @@ func (m UserModel) Insert(user *User) error {
 	err := m.DB.QueryRowContext(ctx, q, args...).Scan(&user.ID, &user.CreatedAt, &user.Version)
 	if err != nil {
 		switch {
-		case err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"`:
+		case err.Error() == `pq: повторяющееся значение ключа нарушает ограничение уникальности "users_email_key"`:
 			return ErrDuplicateEmail
 		default:
 			return err
@@ -131,10 +131,9 @@ func (m UserModel) Update(user *User) error {
 	return nil
 }
 
-
 type password struct {
 	plaintext *string
-	hash []byte
+	hash      []byte
 }
 
 func (p *password) Set(plaintextPassword string) error {
