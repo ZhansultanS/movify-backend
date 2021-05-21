@@ -95,27 +95,31 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 	return &mv, nil
 }
 
-func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
-	q := fmt.Sprintf(`SELECT *
+func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, Metadata, error) {
+	q := fmt.Sprintf(`SELECT count(*) OVER(), *
 		  FROM movies
 		  WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
 		  AND (genres @> $2 OR $2 = '{}')
-		  ORDER BY %s %s, id ASC`, filters.sortColumn(), filters.sortDirection() )
+		  ORDER BY %s %s, id ASC
+	      LIMIT $3 OFFSET $4`, filters.sortColumn(), filters.sortDirection() )
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := m.DB.QueryContext(ctx, q, title, pq.Array(genres))
+	args := []interface{}{title, pq.Array(genres), filters.limit(), filters.offset()}
+	rows, err := m.DB.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 	defer rows.Close()
 
-	var movies []*Movie
+	totalRecords := 0
+	movies := []*Movie{}
 	for rows.Next() {
 		var movie Movie
 		var gnrs []sql.NullString
 		err := rows.Scan(
+			&totalRecords,
 			&movie.Id,
 			&movie.IdTMDB,
 			&movie.Title,
@@ -127,7 +131,7 @@ func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*M
 			&movie.PosterPath,
 		)
 		if err != nil {
-			return nil, err
+			return nil, Metadata{}, err
 		}
 
 		movie.SanitizeGenres(gnrs)
@@ -135,10 +139,12 @@ func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*M
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 
-	return movies, nil
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	return movies, metadata, nil
 }
 
 func (m MovieModel) Update(mv *Movie) error {
