@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -47,12 +46,9 @@ func (app *application) serve() error {
 		shutdownError <- nil
 	}()
 
-	baseUrl, _ := url.Parse(fmt.Sprintf("http://localhost%s/v1/healthcheck", srv.Addr))
-
 	app.logger.PrintInfo("starting server", map[string]string{
 		"addr": srv.Addr,
 		"env":  app.config.env,
-		"url":  baseUrl.String(),
 	})
 
 	err := srv.ListenAndServe()

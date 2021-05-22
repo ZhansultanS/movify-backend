@@ -65,4 +65,5 @@ images/**
 
 .config
 notes/**
-.vscode/**
+.vscode/**bin/
+bin/
