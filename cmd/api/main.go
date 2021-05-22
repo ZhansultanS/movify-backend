@@ -9,6 +9,7 @@ import (
 	"github.com/DARKestMODE/movify/internal/mailer"
 	_ "github.com/lib/pq"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,16 +26,19 @@ type config struct {
 		maxIdleTime  string
 	}
 	rateLimiter struct {
-		rps float64
-		burst int
+		rps     float64
+		burst   int
 		enabled bool
 	}
 	smtp struct {
-		host string
-		port int
+		host     string
+		port     int
 		username string
 		password string
-		sender string
+		sender   string
+	}
+	cors struct {
+		trustedOrigins []string
 	}
 }
 
@@ -43,7 +47,7 @@ type application struct {
 	logger *jsonlog.Logger
 	models data.Models
 	mailer mailer.Mailer
-	wg sync.WaitGroup
+	wg     sync.WaitGroup
 }
 
 func main() {
@@ -66,6 +70,11 @@ func main() {
 	flag.StringVar(&cfg.smtp.username, "smtp-username", "99cbfd4f7f103e", "SMTP username")
 	flag.StringVar(&cfg.smtp.password, "smtp-password", "d868a832f69c95", "SMTP password")
 	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Movify <no-reply@movify.zsalman.net>", "SMTP sender")
+
+	flag.Func("cors-trusted-origins", "Trusted CORS origins (space separated)", func(val string) error {
+		cfg.cors.trustedOrigins = strings.Fields(val)
+		return nil
+	})
 
 	flag.Parse()
 
