@@ -28,7 +28,7 @@ func (app *application) serve() error {
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		s := <-quit
 
-		app.logger.PrintInfo("shutting down server", map[string]string{
+		app.logger.PrintInfo("caught signal", map[string]string{
 			"signal": s.String(),
 		})
 
