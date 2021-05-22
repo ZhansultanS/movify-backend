@@ -20,6 +20,8 @@ type Movie struct {
 	Popularity  float32        `json:"popularity"`
 	PosterPath  string         `json:"poster_path"`
 	Genres      pq.StringArray `json:"genres"`
+	CreatedAt   time.Time      `json:"created_at"`
+	Version     int32          `json:"version"`
 }
 
 func (m *Movie) SanitizeGenres(genres []sql.NullString) {
@@ -55,9 +57,10 @@ type MovieModel struct {
 func (m MovieModel) Insert(mv *Movie) error {
 	q := `INSERT INTO movies (id_tmdb, title, overview, release_date, runtime, genres, popularity, poster_path)
 		  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		  RETURNING id`
+		  RETURNING id, created_at, version`
+
 	args := []interface{}{mv.IdTMDB, mv.Title, mv.Overview, mv.ReleaseDate, mv.Runtime, pq.Array(mv.Genres), mv.Popularity, mv.PosterPath}
-	return m.DB.QueryRow(q, args...).Scan(&mv.Id)
+	return m.DB.QueryRow(q, args...).Scan(&mv.Id, &mv.CreatedAt, &mv.Version)
 }
 
 func (m MovieModel) Get(id int64) (*Movie, error) {
@@ -81,6 +84,8 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 		pq.Array(&genres),
 		&mv.Popularity,
 		&mv.PosterPath,
+		&mv.CreatedAt,
+		&mv.Version,
 	)
 	mv.SanitizeGenres(genres)
 	if err != nil {
@@ -101,7 +106,7 @@ func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*M
 		  WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
 		  AND (genres @> $2 OR $2 = '{}')
 		  ORDER BY %s %s, id ASC
-	      LIMIT $3 OFFSET $4`, filters.sortColumn(), filters.sortDirection() )
+	      LIMIT $3 OFFSET $4`, filters.sortColumn(), filters.sortDirection())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -129,6 +134,8 @@ func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*M
 			pq.Array(&gnrs),
 			&movie.Popularity,
 			&movie.PosterPath,
+			&movie.CreatedAt,
+			&movie.Version,
 		)
 		if err != nil {
 			return nil, Metadata{}, err
@@ -149,15 +156,26 @@ func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*M
 
 func (m MovieModel) Update(mv *Movie) error {
 	q := `UPDATE movies
-		  SET id_tmdb = $2, title = $3, overview = $4, release_date = $5, runtime = $6, popularity = $7, poster_path = $8, genres = $9
-		  WHERE id = $1`
+		  SET id_tmdb = $2, title = $3, overview = $4, release_date = $5, runtime = $6, popularity = $7, poster_path = $8, genres = $9, version = version + 1
+		  WHERE id = $1 AND version = $10
+		  RETURNING version`
+
 	args := []interface{}{
 		mv.Id, mv.IdTMDB, mv.Title,
 		mv.Overview, mv.ReleaseDate, mv.Runtime,
-		mv.Popularity, mv.PosterPath, pq.Array(mv.Genres),
+		mv.Popularity, mv.PosterPath, pq.Array(mv.Genres), mv.Version,
 	}
 
-	return m.DB.QueryRow(q, args...).Err()
+	err := m.DB.QueryRow(q, args...).Scan(&mv.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+	return nil
 }
 
 func (m MovieModel) Delete(id int64) error {
