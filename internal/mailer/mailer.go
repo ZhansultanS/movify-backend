@@ -63,4 +63,3 @@ func (m Mailer) Send(recipient, templateFile string, data interface{}) error {
 	}
 	return nil
 }
-

@@ -12,7 +12,7 @@ import (
 
 var (
 	ErrDuplicateEmail = errors.New("duplicate email")
-	AnonymousUser = &User{}
+	AnonymousUser     = &User{}
 )
 
 type User struct {

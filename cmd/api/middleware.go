@@ -7,8 +7,8 @@ import (
 	"github.com/DARKestMODE/movify/internal/data"
 	"github.com/DARKestMODE/movify/internal/validator"
 	"github.com/felixge/httpsnoop"
+	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -55,15 +55,13 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if app.config.rateLimiter.enabled {
-			ip, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err != nil {
-				app.serverErrorResponse(w, r, err)
-				return
-			}
+			ip := realip.FromRequest(r)
 
 			mu.Lock()
 			if _, found := clients[ip]; !found {
-				clients[ip] = &client{limiter: rate.NewLimiter(2, 4)}
+				clients[ip] = &client{
+					limiter: rate.NewLimiter(rate.Limit(app.config.rateLimiter.rps), app.config.rateLimiter.burst),
+				}
 			}
 
 			clients[ip].lastSeen = time.Now()
